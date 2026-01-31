@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Advanced AI Assistant Pro - App View</title>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <style>
+        :root { --primary: #2563eb; --bg-color: #e2e8f0; --user-bubble: #2563eb; --ai-bubble: #ffffff; --sidebar-bg: #1e293b; }
+        
+        body { 
+            font-family: 'Hind Siliguri', sans-serif; 
+            background: var(--bg-color); 
+            margin: 0; 
+            padding: 0; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .app-wrapper { 
+            width: 100%; 
+            max-width: 450px; 
+            height: 100%; 
+            max-height: 900px; 
+            display: flex; 
+            flex-direction: column; 
+            background: #fff; 
+            position: relative; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        @media (min-width: 500px) {
+            .app-wrapper {
+                height: 95vh;
+                border-radius: 20px;
+                border: 8px solid #333;
+            }
+        }
+
+        /* Header */
+        .header { padding: 12px 15px; background: var(--primary); color: white; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .burger-menu { font-size: 24px; cursor: pointer; background: none; border: none; color: white; }
+        .user-info { display: flex; align-items: center; gap: 8px; font-size: 13px; flex: 1; margin-left: 10px; }
+        .user-pic { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; display: none; }
+        .auth-btn { background: white; color: var(--primary); border: none; padding: 6px 12px; border-radius: 20px; font-weight: 600; cursor: pointer; font-size: 11px; }
+        .logout-head-btn { background: #ff4757; color: white; border: none; padding: 6px 12px; border-radius: 20px; font-weight: 600; cursor: pointer; font-size: 11px; display: none; }
+
+        /* Sidebar */
+        .sidebar { position: absolute; left: -280px; top: 0; width: 280px; height: 100%; background: var(--sidebar-bg); color: white; transition: 0.3s ease; z-index: 100; padding: 20px; box-sizing: border-box; }
+        .sidebar.active { left: 0; }
+        .sidebar-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
+        .sidebar-overlay.active { display: block; }
+        .sidebar h3 { font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-top: 0; }
+        
+        .new-chat-btn { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: 600; }
+        
+        .history-list { margin-top: 15px; overflow-y: auto; max-height: 60vh; }
+        .history-item { background: #334155; padding: 12px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; cursor: pointer; transition: 0.2s; position: relative; user-select: none; }
+        .history-item:active { background: #475569; transform: scale(0.98); }
+
+        /* Chat UI */
+        .chat-container { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #f1f5f9; }
+        .msg { max-width: 85%; padding: 10px 14px; border-radius: 15px; font-size: 14px; line-height: 1.4; animation: slideIn 0.3s ease-out; word-wrap: break-word; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .user-msg { align-self: flex-end; background: var(--user-bubble); color: white; border-bottom-right-radius: 2px; }
+        .ai-msg { align-self: flex-start; background: var(--ai-bubble); color: #1e293b; border-bottom-left-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        .suggestion-box { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .suggest-btn { background: #e2e8f0; border: none; padding: 6px 12px; border-radius: 15px; cursor: pointer; font-size: 12px; color: #334155; font-weight: 600; }
+
+        .input-box { padding: 10px; display: flex; gap: 8px; background: white; border-top: 1px solid #e2e8f0; }
+        input { flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 20px; outline: none; font-size: 14px; }
+        .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        
+        .video-container { width: 100%; margin-top: 8px; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; background: #000; }
+        .video-container iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+    
+    <div class="sidebar" id="sidebar">
+        <h3>চ্যাট অপশন</h3>
+        <button class="new-chat-btn" onclick="startNewChat()">+ নতুন চ্যাট</button>
+        <div id="historyList" class="history-list">
+            <p style="color: #94a3b8; font-size: 12px;">লগইন করলে হিস্ট্রি সেভ হবে।</p>
+        </div>
+        <button id="logoutBtn" class="auth-btn" style="margin-top: 20px; display: none; width: 100%; background: #ef4444; color: white;" onclick="logout()">লগআউট</button>
+    </div>
+
+    <div class="header">
+        <button class="burger-menu" onclick="toggleSidebar()">☰</button>
+        <div class="user-info">
+            <img src="" id="userPic" class="user-pic">
+            <span id="userName">AI এসিস্ট্যান্ট Pro</span>
+        </div>
+        <button class="auth-btn" id="loginBtn" onclick="login()">সাইন আপ</button>
+        <button class="logout-head-btn" id="logoutHeadBtn" onclick="logout()">লগআউট</button>
+    </div>
+
+    <div class="chat-container" id="chatBox"></div>
+
+    <div class="input-box">
+        <button class="icon-btn" style="background:#ef4444; color:white;" onclick="startVoice()">🎤</button>
+        <input type="text" id="userInput" placeholder="জিজ্ঞাসা করুন..." onkeypress="if(event.key==='Enter') processChat()">
+        <button class="icon-btn" style="background: #2563eb; color:white;" onclick="processChat()">➤</button>
+    </div>
+</div>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyBMXZJ86Khbm0vAq41_Kna-96daZPHH1Kc",
+    databaseURL: "https://ai-ashad-default-rtdb.firebaseio.com",
+    projectId: "ai-ashad",
+    authDomain: "ai-ashad.firebaseapp.com"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
+const provider = new firebase.auth.GoogleAuthProvider();
+
+let knowledgeBase = {};
+let currentUser = null;
+let currentChatId = null; 
+
+db.ref('knowledge/').on('value', snap => { if(snap.exists()) knowledgeBase = snap.val(); });
+
+auth.onAuthStateChanged(user => {
+    if (user) {
+        currentUser = user;
+        
+        // অ্যাডমিন ড্যাশবোর্ডের জন্য ইউজার ডেটা আপডেট
+        db.ref('users/' + user.uid).update({
+            name: user.displayName,
+            email: user.email,
+            photo: user.photoURL,
+            lastLogin: Date.now()
+        });
+
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'block';
+        document.getElementById('logoutHeadBtn').style.display = 'block'; // হেডারে লগআউট দেখাবে
+        document.getElementById('userPic').src = user.photoURL;
+        document.getElementById('userPic').style.display = 'block';
+        document.getElementById('userName').innerText = user.displayName.split(' ')[0];
+        loadHistoryList();
+    } else {
+        currentUser = null;
+        document.getElementById('loginBtn').style.display = 'block';
+        document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('logoutHeadBtn').style.display = 'none'; // হেডারে লগআউট লুকাবে
+        document.getElementById('userPic').style.display = 'none';
+        document.getElementById('userName').innerText = "AI এসিস্ট্যান্ট Pro";
+    }
+});
+
+function login() { auth.signInWithPopup(provider).catch(e => alert(e.message)); }
+function logout() { 
+    if(confirm("আপনি কি লগআউট করতে চান?")) {
+        auth.signOut().then(() => location.reload()); 
+    }
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('active');
+    document.getElementById('overlay').classList.toggle('active');
+}
+
+function startNewChat() {
+    currentChatId = null;
+    document.getElementById('chatBox').innerHTML = '';
+    toggleSidebar();
+}
+
+function processChat(forcedText = null) {
+    stopAllVideos();
+    const input = document.getElementById('userInput');
+    const text = (forcedText || input.value).trim();
+    if(!text) return;
+
+    if(!forcedText) addMsg(text, "user-msg");
+    input.value = "";
+
+    if (!currentChatId && currentUser) {
+        currentChatId = 'chat_' + Date.now();
+        db.ref(`users/${currentUser.uid}/chat_list/${currentChatId}`).set({
+            title: text.substring(0, 30),
+            timestamp: Date.now()
+        });
+    }
+
+    setTimeout(() => {
+        const result = findBestMatch(text);
+        let answer = "";
+        if(result && result.answer) {
+            answer = result.answer;
+            addMsg(answer, "ai-msg");
+            if(result.related.length > 0) showSuggestions(result.related);
+            speak(answer);
+        } else {
+            answer = "আমি ঠিক বুঝতে পারছি না। আপনি কি এগুলো খুঁজছেন?";
+            const related = getRelatedQuestions(text);
+            addMsg(answer, "ai-msg");
+            showSuggestions(related);
+            
+            // অজানা প্রশ্ন সেভ করা
+            db.ref('unknown_questions').push({
+                question: text,
+                time: Date.now()
+            });
+        }
+        
+        if(currentUser && currentChatId) {
+            saveMessageToCloud(text, answer);
+        }
+    }, 500);
+}
+
+function findBestMatch(userInput) {
+    const cleanIn = userInput.toLowerCase().trim();
+    for (let key in knowledgeBase) {
+        let question = key.replace(/_/g, " ");
+        if(cleanIn === question.toLowerCase()) {
+            return { answer: knowledgeBase[key], related: getRelatedQuestions(userInput) };
+        }
+    }
+    return null;
+}
+
+function getRelatedQuestions(text) {
+    const cleanIn = text.toLowerCase();
+    return Object.keys(knowledgeBase)
+        .map(k => k.replace(/_/g, " "))
+        .filter(q => q.toLowerCase() !== cleanIn && (q.toLowerCase().includes(cleanIn) || cleanIn.includes(q.toLowerCase())))
+        .slice(0, 4);
+}
+
+function addMsg(text, type) {
+    const box = document.getElementById('chatBox');
+    const div = document.createElement('div');
+    div.className = `msg ${type}`;
+    
+    const isCode = /<[a-z][\s\S]*>/i.test(text);
+    if (isCode && type === "ai-msg") {
+        div.innerHTML = `<iframe style="width:100%; height:150px; border:none; background:white; border-radius:10px;" srcdoc='${text.replace(/'/g, "&apos;")}'></iframe>`;
+    } else {
+        const urlPattern = /(\b(https?):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        div.innerHTML = text.replace(urlPattern, url => `<a href="${url}" target="_blank" style="color:inherit;">${url}</a>`);
+        const yt = text.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+        if(yt) div.innerHTML += `<div class="video-container"><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen></iframe></div>`;
+    }
+
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function showSuggestions(list) {
+    if(!list || list.length === 0) return;
+    const box = document.getElementById('chatBox');
+    const sDiv = document.createElement('div');
+    sDiv.className = 'suggestion-box';
+    list.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'suggest-btn';
+        btn.innerText = item;
+        btn.onclick = () => processChat(item);
+        sDiv.appendChild(btn);
+    });
+    box.appendChild(sDiv);
+    box.scrollTop = box.scrollHeight;
+}
+
+function saveMessageToCloud(q, a) {
+    db.ref(`users/${currentUser.uid}/messages/${currentChatId}`).push({ q, a, time: Date.now() });
+}
+
+function loadHistoryList() {
+    db.ref(`users/${currentUser.uid}/chat_list`).on('value', snap => {
+        const list = document.getElementById('historyList');
+        list.innerHTML = '';
+        if(!snap.exists()) {
+            list.innerHTML = '<p style="color: #94a3b8; font-size: 12px;">কোনো চ্যাট নেই</p>';
+            return;
+        }
+        snap.forEach(child => {
+            const chatId = child.key;
+            const chatData = child.val();
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerText = chatData.title;
+            
+            let timer;
+            div.onmousedown = div.ontouchstart = () => {
+                timer = setTimeout(() => {
+                    if(confirm("এই চ্যাটটি কি ডিলিট করতে চান?")) {
+                        deleteChat(chatId);
+                    }
+                }, 800);
+            };
+            div.onmouseup = div.onmouseleave = div.ontouchend = () => clearTimeout(timer);
+
+            div.onclick = () => {
+                loadFullChat(chatId);
+                toggleSidebar();
+            };
+            list.prepend(div);
+        });
+    });
+}
+
+function loadFullChat(chatId) {
+    currentChatId = chatId;
+    const box = document.getElementById('chatBox');
+    box.innerHTML = '<p style="text-align:center; color:#888;">লোড হচ্ছে...</p>';
+    db.ref(`users/${currentUser.uid}/messages/${chatId}`).once('value', snap => {
+        box.innerHTML = '';
+        snap.forEach(msg => {
+            const data = msg.val();
+            addMsg(data.q, "user-msg");
+            addMsg(data.a, "ai-msg");
+        });
+    });
+}
+
+function deleteChat(chatId) {
+    db.ref(`users/${currentUser.uid}/chat_list/${chatId}`).remove();
+    db.ref(`users/${currentUser.uid}/messages/${chatId}`).remove();
+    if(currentChatId === chatId) startNewChat();
+}
+
+function stopAllVideos() { document.querySelectorAll('iframe').forEach(f => { f.src = f.src; }); }
+
+function speak(t) {
+    if(!t || t.includes('http') || t.includes('<')) return;
+    const s = new SpeechSynthesisUtterance(t); s.lang = 'bn-BD'; window.speechSynthesis.speak(s);
+}
+
+function startVoice() {
+    const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    rec.lang = 'bn-BD'; rec.start();
+    rec.onresult = (e) => { document.getElementById('userInput').value = e.results[0][0].transcript; processChat(); };
+}
+</script>
+</body>
+</html>
